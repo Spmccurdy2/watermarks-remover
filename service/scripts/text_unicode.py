@@ -384,6 +384,10 @@ _ZWSP = 0x200B
 
 def _spaceless_script(cp: int) -> str | None:
     """Return the script group for letters of scripts that use ZWSP as a word break."""
+    # Letters and marks only: the kana block also holds punctuation such as
+    # U+30FB KATAKANA MIDDLE DOT, next to which a ZWSP is not a word break.
+    if unicodedata.category(chr(cp))[0] not in ("L", "M"):
+        return None
     if _is_cjk_ideograph(cp) or 0x3040 <= cp <= 0x30FF:  # Han, hiragana, katakana
         return "cjk"
     for start, end, name in (
@@ -393,7 +397,7 @@ def _spaceless_script(cp: int) -> str | None:
         (0x1000, 0x109F, "myanmar"),
         (0x1780, 0x17FF, "khmer"),
     ):
-        if start <= cp <= end and unicodedata.category(chr(cp))[0] in ("L", "M"):
+        if start <= cp <= end:
             return name
     return None
 
@@ -752,11 +756,20 @@ def clean_text(
         "removed_count": sum(removed.values()),
         "replaced_count": sum(replaced.values()),
         "nfkc_changed": nfkc_changed,
-        "zwsp_word_joins": [
-            {"offset": offset, "line": text.count("\n", 0, offset) + 1} for offset in joined_words
-        ],
+        "zwsp_word_joins": _join_positions(text, joined_words),
     }
     return result, stats
+
+
+def _join_positions(text: str, offsets: list[int]) -> list[dict]:
+    """Offset and 1-based line for each ascending offset, counting newlines once."""
+    positions: list[dict] = []
+    line, scanned = 1, 0
+    for offset in offsets:
+        line += text.count("\n", scanned, offset)
+        scanned = offset
+        positions.append({"offset": offset, "line": line})
+    return positions
 
 
 def describe_zwsp_joins(stats: dict) -> str | None:

@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +87,22 @@ def test_japanese_line_break_hint_is_preserved():
     assert cleaned == text
 
 
+def test_zwsp_next_to_kana_punctuation_is_still_stripped():
+    # U+30FB KATAKANA MIDDLE DOT and U+30A0 double hyphen sit in the kana block
+    # but are punctuation, so a ZWSP beside them is not a word break.
+    for punct in ("\u30fb", "\u30a0"):
+        text = f"\u30ab{ZWSP}{punct}\u30ab"
+        cleaned, _ = clean_text(text)
+        assert cleaned == text.replace(ZWSP, "")
+        assert inspect_text(text).suspicious_total == 1
+
+
+def test_zwsp_before_kana_length_mark_is_preserved():
+    # U+30FC PROLONGED SOUND MARK is a letter (Lm), so the break is kept.
+    text = f"\u30ab{ZWSP}\u30fc"
+    assert clean_text(text)[0] == text
+
+
 def test_zwsp_between_different_scripts_is_still_stripped():
     cleaned, _ = clean_text(f"\u0e44\u0e17\u0e22{ZWSP}Latin")
     assert cleaned == "\u0e44\u0e17\u0e22Latin"
@@ -153,6 +170,26 @@ def test_join_warning_names_each_line_once_in_order():
 def test_join_warning_sorts_lines_given_out_of_order():
     stats = {"zwsp_word_joins": [{"offset": 9, "line": 8}, {"offset": 1, "line": 2}]}
     assert describe_zwsp_joins(stats).endswith("on line(s) 2, 8")
+
+
+def test_join_lines_are_exact_across_many_lines_and_blank_runs():
+    text = "".join(("\n" * (n % 3)) + f"x{ZWSP}y\n" for n in range(200))
+    _, stats = clean_text(text)
+    expected = [
+        {"offset": offset, "line": text.count("\n", 0, offset) + 1}
+        for offset, ch in enumerate(text)
+        if ch == ZWSP
+    ]
+    assert stats["zwsp_word_joins"] == expected
+
+
+def test_join_reporting_scales_linearly():
+    text = f"w{ZWSP}w\n" * 40_000
+    start = time.perf_counter()
+    _, stats = clean_text(text)
+    assert len(stats["zwsp_word_joins"]) == 40_000
+    assert stats["zwsp_word_joins"][-1]["line"] == 40_000
+    assert time.perf_counter() - start < 2.0
 
 
 def test_join_warning_truncates_after_five_distinct_lines():
