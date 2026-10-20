@@ -87,6 +87,23 @@ def test_japanese_line_break_hint_is_preserved():
     assert cleaned == text
 
 
+def test_zwsp_next_to_cjk_iteration_marks_is_preserved():
+    # U+3005 and U+303B are letters (Lm) outside the kana block: 日々, 時〻.
+    for text in (
+        f"\u65e5\u3005{ZWSP}\u65e5\u672c",
+        f"\u65e5\u672c{ZWSP}\u3005",
+        f"\u6642\u303b{ZWSP}\u30ab",
+    ):
+        assert clean_text(text)[0] == text
+
+
+def test_zwsp_next_to_cjk_brackets_and_numerals_is_still_stripped():
+    # U+3008 bracket (Ps) and U+3007 ideographic zero (Nl) share the range.
+    for neighbour in ("\u3008", "\u3007"):
+        text = f"\u65e5{ZWSP}{neighbour}"
+        assert clean_text(text)[0] == text.replace(ZWSP, "")
+
+
 def test_zwsp_next_to_kana_punctuation_is_still_stripped():
     # U+30FB KATAKANA MIDDLE DOT and U+30A0 double hyphen sit in the kana block
     # but are punctuation, so a ZWSP beside them is not a word break.

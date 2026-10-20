@@ -388,7 +388,10 @@ def _spaceless_script(cp: int) -> str | None:
     # U+30FB KATAKANA MIDDLE DOT, next to which a ZWSP is not a word break.
     if unicodedata.category(chr(cp))[0] not in ("L", "M"):
         return None
-    if _is_cjk_ideograph(cp) or 0x3040 <= cp <= 0x30FF:  # Han, hiragana, katakana
+    # Han, CJK iteration/closing marks (U+3005, U+3006, U+303B), kana repeat
+    # marks, hiragana and katakana; the gate above drops the brackets, numerals
+    # and symbols that share U+3005..U+30FF.
+    if _is_cjk_ideograph(cp) or 0x3005 <= cp <= 0x30FF:
         return "cjk"
     for start, end, name in (
         (0x0E00, 0x0E7F, "thai"),
